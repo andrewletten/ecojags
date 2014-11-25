@@ -1,0 +1,23 @@
+
+    model{
+    # Priors beta and sigma
+    for (i in 1:K) { beta[i] ~ dnorm(0, 0.0001)}
+    tau  <- 1 / (sigma * sigma)
+    sigma ~ dunif(0.0001, 20)
+    
+    # Priors random effects and sigma_Elev
+    for (i in 1:Nre) {a[i] ~ dnorm(0, tau_Elev)}
+    tau_Elev <- 1 / (sigma_Elev * sigma_Elev)
+    sigma_Elev ~ dunif(0.0001, 20)
+    
+    # Likelihood
+    for (i in 1:N) {
+    Y[i]    ~ dnorm(mu[i], tau)
+    mu[i]  <- eta[i] + a[Elev[i]]
+    eta[i] <- inprod(beta[], X[i,])
+    
+    # Residuals
+    Res[i]    <- Y[i] - mu[i]
+    }
+    }
+    
