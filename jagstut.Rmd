@@ -149,7 +149,7 @@ params = c("beta", "sigma", "Res", "mu")
 ```
 
 Finally, call JAGS using the `jags` function in R2Jags
-```{r}
+```{r, results = 'hide'}
 fitmod = jags(data = jags.data,
               # inits = inits, 
               parameters = params,
@@ -270,7 +270,7 @@ params = c("beta", "sigma", "Res", "a", "sigma_Elev", "mu", "eta")
 ```
 
 Run JAGS, run...
-```{r}
+```{r, results = 'hide'}
 fit.mixmod = jags(data = jags.data,
            # inits = inits,
            parameters = params,
@@ -375,7 +375,7 @@ sink()}
 params <- c("beta", "Res", "a", "sigma_Elev", "mu", "eta")
 ```
 
-```{r}
+```{r, results = 'hide'}
 # Start JAGS
 fit.mixpois = jags(data       = jags.data,
            # inits = inits,
