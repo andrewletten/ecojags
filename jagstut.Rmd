@@ -388,7 +388,7 @@ fit.mixpois = jags(data       = jags.data,
 ```
 
 In case of lack of convergence - update on  the fly!
-```{r}
+```{r, results = 'hide'}
 fit.mixpois = update(fit.mixpois, n.iter = 10000, n.thin = 10) # 
 ```
 
