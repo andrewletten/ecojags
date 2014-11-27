@@ -1,19 +1,18 @@
----
-title: "(Generalised) linear (mixed) models with R2jags: an extremely brief primer..."
-author: "Andrew Letten"
-date: "Friday, November 28, 2014"
-output: html_document
----
+##(Generalised) linear (mixed) models with R2jags: an extremely brief primer...##
+
+***Andrew Letten***
+
+***Friday, November 28, 2014***
 
 The purpose of this [ecostats](http://www.eco-stats.unsw.edu.au/) lab is to provide a very basic primer on running basic lm, glm and glmms in a Bayesian framework using the R2jags package (and of course JAGS). As such, the goal is not to debate the relative merits of Bayesian vs frequentist approaches, but hopefully to demystify the fitting of Bayesian models, and more specifically demonstrate that in a wide variety of (more basic) use cases the parameter estimates obtained from the two approaches are typically very similar.
 
 We will be attempting to reproduce a small element of the analysis from a recently published article in *Journal of Ecology* (for which all the data is available at datadryad.org).
 
-Kessler, M., Salazar, L., Homeier, J., Kluge, J. (2014), Species richness-productivity relationships of tropical terrestrial ferns at regional and local scales. *Journal of Ecology*, 102: 1623-1633. <http://onlinelibrary.wiley.com/doi/10.1111/1365-2745.12299/abstract>
+Kessler, M., Salazar, L., Homeier, J., Kluge, J. (2014), Species richness-productivity relationships of tropical terrestrial ferns at regional and local scales. *Journal of Ecology*, 102: 1623-1633. http://onlinelibrary.wiley.com/doi/10.1111/1365-2745.12299/abstract
 
 First things first: JAGS, R packages and data.  
 
-If you don't have it already you will need to dowload JAGS from http://sourceforge.net/projects/mcmc-jags/files/rjags/. 
+If you don't have it already you will need to download JAGS from http://sourceforge.net/projects/mcmc-jags/files/rjags/. 
 
 
 ```r
@@ -30,7 +29,7 @@ library(runjags)
 library(coefplot2)
 ```
 
-To obtain the data you can either uncomment the following code block, or alternatively proceed directly to the  next block and read in a reformatted file prepared a little earlier... 
+To obtain the data you can either uncomment the following code block, or alternatively proceed directly to the next block and read in 'KessDiv.csv' which has already been modified into a useable format.
 
 
 ```r
@@ -64,36 +63,39 @@ To obtain the data you can either uncomment the following code block, or alterna
 # colnames(div)[2:4] = c("elev", "rich", "logprod")
 ```
 
+Data consists of the fern species richness and productivity sampled at 18 sites nested at 6 different elevations (i.e. three sites at each elevation.
+
 
 ```r
 div = read.csv(file = "KessDiv.csv", header = TRUE)
-
-div$elev = as.numeric(as.factor(div$elev))
-div$plot = as.numeric(as.factor(div$plot))
 
 div
 ```
 
 ```
 ##    plot elev rich logprod
-## 1     1    6    3   5.486
-## 2    10    2   10   5.310
-## 3    11    2    8   5.721
-## 4    12    2    9   5.295
-## 5    13    1    9   6.369
-## 6    14    6    3   4.614
-## 7    15    5    6   4.070
-## 8    16    6    3   4.527
-## 9     2    3   14   6.594
-## 10   17    5    6   5.540
-## 11   18    5    5   4.405
-## 12    3    3   22   6.863
-## 13    4    4   20   8.048
-## 14    5    3   17   7.433
-## 15    6    4   19   7.667
-## 16    7    4   16   8.213
-## 17    8    1   13   6.339
-## 18    9    1   12   6.452
+## 1     1 4000    3   5.486
+## 2    13 1000   10   5.310
+## 3    14 1000    8   5.721
+## 4    15 1000    9   5.295
+## 5    16  500    9   6.369
+## 6    17 4000    3   4.614
+## 7    18 3500    6   4.070
+## 8    19 4000    3   4.527
+## 9     2 2000   14   6.594
+## 10   20 3500    6   5.540
+## 11   21 3500    5   4.405
+## 12    3 2000   22   6.863
+## 13    4 2500   20   8.048
+## 14    5 2000   17   7.433
+## 15    6 2500   19   7.667
+## 16    7 2500   16   8.213
+## 17    8  500   13   6.339
+## 18    9  500   12   6.452
+```
+
+```r
+div$elev = as.numeric(as.factor(div$elev)) # formatting for JAGS
 ```
 
 **Hypothesis: There is a significant relationship between fern species richness `div$rich` and fern productivity `div$logprod`.**
@@ -103,7 +105,7 @@ div
 
 ```r
 # lm 
-mod = lm(rich ~ logprod, data = div)
+mod = lm(rich ~ logprod, data = div) 
 summary(mod) # -ve intercept = negative species richness at zero productivity!
 ```
 
@@ -129,24 +131,25 @@ summary(mod) # -ve intercept = negative species richness at zero productivity!
 ```
 
 ```r
-plot(rich ~ logprod, data=div)
+plot(rich ~ logprod, data=div) 
 abline(mod)
 ```
 
 ![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4.png) 
 
-With a random effect on elevation (NB: only 6 levels with 3 data points in each)
+With a random effect (intercept only) on elevation (NB: only 6 levels with 3 data points in each)
 
 
 ```r
 # lmm
-mixmod = lmer(rich ~ logprod + (1|as.factor(div$elev)), data = div) # as.factor not necessary but doing it here for 'cleanliness' 
+Elev = as.factor(div$elev) # back to a factor - not necessary for lmer but doing it here for peace of mind.
+mixmod = lmer(rich ~ logprod + (1|Elev), data = div) 
 summary(mixmod) # parameter estimates same sign as original paper but different abs value (poss due to how the productivty measure was calculated)
 ```
 
 ```
 ## Linear mixed model fit by REML ['lmerMod']
-## Formula: rich ~ logprod + (1 | as.factor(div$elev))
+## Formula: rich ~ logprod + (1 | Elev)
 ##    Data: div
 ## 
 ## REML criterion at convergence: 87.2
@@ -156,10 +159,10 @@ summary(mixmod) # parameter estimates same sign as original paper but different 
 ## -1.3761 -0.5986 -0.0094  0.5593  2.2647 
 ## 
 ## Random effects:
-##  Groups              Name        Variance Std.Dev.
-##  as.factor(div$elev) (Intercept) 3.32     1.82    
-##  Residual                        7.42     2.72    
-## Number of obs: 18, groups: as.factor(div$elev), 6
+##  Groups   Name        Variance Std.Dev.
+##  Elev     (Intercept) 3.32     1.82    
+##  Residual             7.42     2.72    
+## Number of obs: 18, groups: Elev, 6
 ## 
 ## Fixed effects:
 ##             Estimate Std. Error t value
@@ -171,17 +174,86 @@ summary(mixmod) # parameter estimates same sign as original paper but different 
 ## logprod -0.978
 ```
 
-*JAGS (Bayesian) approach (linear model)*
+*JAGS (Bayesian) approach (linear model without random effect)*
 
-First need to bundle data into a JAGS friendly format
+First need to bundle data into a JAGS friendly format, starting with the design matix... 
 
 ```r
 X = model.matrix(~ scale(logprod), data = div) #standardize (scale and centre) predictors for JAGS/BUGS analysis
-
-jags.data = list(Y = div$rich, X = X,N = nrow(div), K = ncol(X))
+X
 ```
 
-Write model in JAGS code (Note the first open and last closing braces are only needed when compiling with knitr, see <https://groups.google.com/forum/#!topic/knitr/TCz9vNLlslY>)
+```
+##    (Intercept) scale(logprod)
+## 1            1        -0.4471
+## 2            1        -0.5857
+## 3            1        -0.2615
+## 4            1        -0.5977
+## 5            1         0.2497
+## 6            1        -1.1351
+## 7            1        -1.5639
+## 8            1        -1.2037
+## 9            1         0.4276
+## 10           1        -0.4041
+## 11           1        -1.2999
+## 12           1         0.6395
+## 13           1         1.5741
+## 14           1         1.0890
+## 15           1         1.2735
+## 16           1         1.7045
+## 17           1         0.2259
+## 18           1         0.3149
+## attr(,"assign")
+## [1] 0 1
+```
+
+A brief aside - remember the goal of regression is to find the best solution (parameters) to a series of linear equations (deterministic part) assumming our response is a random variable following some probability distribution (stochastic part): 
+
+
+```r
+# deterministic & stochastic part 
+data.frame("y" = div$rich, 
+           "int" = paste(rep("  =  beta1", times = 18), "*", X[,1]), 
+           "beta" = rep("  +   beta2 *", times = 18), 
+           "x" = X[,2],
+           "residuals" = paste("+   e", 1:18, sep = ""), 
+           row.names = paste("Obs", 1:18, "      ", sep = ""))
+```
+
+```
+##              y            int          beta       x residuals
+## Obs1         3   =  beta1 * 1   +   beta2 * -0.4471    +   e1
+## Obs2        10   =  beta1 * 1   +   beta2 * -0.5857    +   e2
+## Obs3         8   =  beta1 * 1   +   beta2 * -0.2615    +   e3
+## Obs4         9   =  beta1 * 1   +   beta2 * -0.5977    +   e4
+## Obs5         9   =  beta1 * 1   +   beta2 *  0.2497    +   e5
+## Obs6         3   =  beta1 * 1   +   beta2 * -1.1351    +   e6
+## Obs7         6   =  beta1 * 1   +   beta2 * -1.5639    +   e7
+## Obs8         3   =  beta1 * 1   +   beta2 * -1.2037    +   e8
+## Obs9        14   =  beta1 * 1   +   beta2 *  0.4276    +   e9
+## Obs10        6   =  beta1 * 1   +   beta2 * -0.4041   +   e10
+## Obs11        5   =  beta1 * 1   +   beta2 * -1.2999   +   e11
+## Obs12       22   =  beta1 * 1   +   beta2 *  0.6395   +   e12
+## Obs13       20   =  beta1 * 1   +   beta2 *  1.5741   +   e13
+## Obs14       17   =  beta1 * 1   +   beta2 *  1.0890   +   e14
+## Obs15       19   =  beta1 * 1   +   beta2 *  1.2735   +   e15
+## Obs16       16   =  beta1 * 1   +   beta2 *  1.7045   +   e16
+## Obs17       13   =  beta1 * 1   +   beta2 *  0.2259   +   e17
+## Obs18       12   =  beta1 * 1   +   beta2 *  0.3149   +   e18
+```
+
+We can also write these equations in a more simple form using vectors and matrices, where we have a a vector consisting of the paramaters (betas) and and the matrix is the design matrix `X` we get from `model.matrix`. In the second example, we'll take advantage of matrix algebra to simplifiy the JAGS code. 
+
+JAGS expects the data as a named list:
+
+```r
+jags.data = list(Y = div$rich, 
+                 X = X, 
+                 N = nrow(div), 
+                 K = ncol(X))
+```
+
+Specify the model in JAGS code. The sink and cat functions writes the model into a text file in the working directory. Something that can be confusing at first is that unlike R code which is read top to bottom, JAGS does not care about the order. As such variables may be called before they appear to have been defined. (Note the open and closing braces before and after sink are only needed when compiling an html/pdf with `knitr`, see [here](https://groups.google.com/forum/#!topic/knitr/TCz9vNLlslY)).
 
 
 ```r
@@ -193,10 +265,10 @@ model{
 
     #Priors beta 
     #In JAGS: dnorm(0, 1/sigma^2)
-    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)} # small precision = large variance
+    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)} # small precision(tau) = large variance = diffuse prior
      
     #Priors sigma
-    tau <- 1 / (sigma * sigma)  #tau = 1/ sigma^2
+    tau <- 1 / (sigma * sigma)  # tau = 1/ sigma^2
     sigma ~ dunif(0.0001, 10)
 
     #Likelihood
@@ -219,7 +291,7 @@ Provide a function to generate inits for each parameters (can skip this for now 
 ```r
 # # Initial values
 # inits  = function (){
-#   list(beta = rnorm(K, 0, 0.01), 
+#   list(beta = rnorm(ncol(X), 0, 0.01), 
 #        sigma = runif(1, 0.0001, 10))
 #   }
 ```
@@ -237,16 +309,71 @@ fitmod = jags(data = jags.data,
               # inits = inits, 
               parameters = params,
               model = "model.txt",
-              n.thin = 10,
               n.chains = 3,
-              n.burnin = 1000,
-              n.iter = 5000)
+              n.thin = 10,
+              n.iter = 5000,
+              n.burnin = 1000)
 ```
 
 Extract output...
 
 ```r
-out = fitmod$BUGSoutput
+out = fitmod$BUGSoutput # output in WinBUGS format
+out
+```
+
+```
+## Inference for Bugs model at "model.txt", fit using jags,
+##  3 chains, each with 5000 iterations (first 1000 discarded), n.thin = 10
+##  n.sims = 1200 iterations saved
+##          mean  sd 2.5%  25%  50%  75% 97.5% Rhat n.eff
+## Res[1]   -5.4 0.9 -7.1 -6.0 -5.5 -4.8  -3.7    1   540
+## Res[2]    2.3 0.9  0.4  1.7  2.3  2.9   4.2    1   570
+## Res[3]   -1.4 0.8 -3.1 -2.0 -1.4 -0.9   0.2    1   530
+## Res[4]    1.4 0.9 -0.5  0.7  1.3  2.0   3.3    1   570
+## Res[5]   -3.1 0.8 -4.8 -3.7 -3.1 -2.6  -1.5    1   680
+## Res[6]   -1.8 1.2 -4.2 -2.6 -1.8 -1.0   0.6    1   740
+## Res[7]    3.5 1.5  0.4  2.5  3.5  4.4   6.4    1   910
+## Res[8]   -1.4 1.3 -3.9 -2.3 -1.4 -0.6   1.1    1   770
+## Res[9]    0.9 0.9 -0.9  0.3  0.9  1.5   2.6    1   820
+## Res[10]  -2.7 0.9 -4.3 -3.3 -2.7 -2.1  -0.9    1   540
+## Res[11]   1.1 1.3 -1.6  0.2  1.1  1.9   3.7    1   810
+## Res[12]   7.8 1.0  5.8  7.2  7.8  8.4   9.6    1  1000
+## Res[13]   0.8 1.5 -2.2 -0.2  0.8  1.8   3.8    1  1200
+## Res[14]   0.4 1.2 -2.1 -0.4  0.4  1.2   2.6    1  1200
+## Res[15]   1.4 1.3 -1.3  0.5  1.4  2.3   3.9    1  1200
+## Res[16]  -3.9 1.6 -7.1 -4.9 -3.9 -2.8  -0.8    1  1200
+## Res[17]   1.0 0.8 -0.7  0.4  1.0  1.5   2.6    1   660
+## Res[18]  -0.5 0.8 -2.2 -1.0 -0.5  0.1   1.1    1   720
+## beta[1]  10.8 0.8  9.2 10.3 10.8 11.4  12.3    1   520
+## beta[2]   5.3 0.8  3.7  4.8  5.3  5.8   6.9    1  1200
+## deviance 93.3 2.8 90.1 91.2 92.6 94.7 100.2    1  1200
+## mu[1]     8.4 0.9  6.7  7.8  8.5  9.0  10.1    1   470
+## mu[2]     7.7 0.9  5.8  7.1  7.7  8.3   9.6    1   480
+## mu[3]     9.4 0.8  7.8  8.9  9.4 10.0  11.1    1   470
+## mu[4]     7.6 0.9  5.7  7.0  7.7  8.3   9.5    1   480
+## mu[5]    12.1 0.8 10.5 11.6 12.1 12.7  13.8    1   650
+## mu[6]     4.8 1.2  2.4  4.0  4.8  5.6   7.2    1   740
+## mu[7]     2.5 1.5 -0.4  1.6  2.5  3.5   5.6    1   910
+## mu[8]     4.4 1.3  1.9  3.6  4.4  5.3   6.9    1   770
+## mu[9]    13.1 0.9 11.4 12.5 13.1 13.7  14.9    1   810
+## mu[10]    8.7 0.9  6.9  8.1  8.7  9.3  10.3    1   470
+## mu[11]    3.9 1.3  1.3  3.1  3.9  4.8   6.6    1   810
+## mu[12]   14.2 1.0 12.4 13.6 14.2 14.8  16.2    1  1100
+## mu[13]   19.2 1.5 16.2 18.2 19.2 20.2  22.2    1  1200
+## mu[14]   16.6 1.2 14.4 15.8 16.6 17.4  19.1    1  1200
+## mu[15]   17.6 1.3 15.1 16.7 17.6 18.5  20.3    1  1200
+## mu[16]   19.9 1.6 16.8 18.8 19.9 20.9  23.1    1  1200
+## mu[17]   12.0 0.8 10.4 11.5 12.0 12.6  13.7    1   630
+## mu[18]   12.5 0.8 10.9 11.9 12.5 13.0  14.2    1   700
+## sigma     3.4 0.7  2.4  2.9  3.3  3.7   5.0    1  1200
+## 
+## For each parameter, n.eff is a crude measure of effective sample size,
+## and Rhat is the potential scale reduction factor (at convergence, Rhat=1).
+## 
+## DIC info (using the rule, pD = var(deviance)/2)
+## pD = 3.9 and DIC = 97.3
+## DIC is an estimate of expected predictive error (lower deviance is better).
 ```
 
 Check mixing/convergence of betas (intercept and slope)...
@@ -255,23 +382,31 @@ Check mixing/convergence of betas (intercept and slope)...
 traceplot(fitmod, varname = c("beta"))
 ```
 
-![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-121.png) ![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-122.png) 
+![plot of chunk unnamed-chunk-14](figure/unnamed-chunk-141.png) ![plot of chunk unnamed-chunk-14](figure/unnamed-chunk-142.png) 
 
 Check density plots
 
 ```r
+par(mfrow = c(1,2))
 hist(out$sims.list$beta[,1])
 abline(v = 0, col = "red")
-```
 
-![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-131.png) 
-
-```r
 hist(out$sims.list$beta[,2])
 abline(v = 0, col = "red")
 ```
 
-![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-132.png) 
+![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-151.png) 
+
+```r
+dev.off()
+```
+
+![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-152.png) 
+
+```
+## RStudioGD 
+##         2
+```
 
 Beta coefs and credible intervals
 
@@ -282,8 +417,8 @@ my.coefs
 
 ```
 ##           mean     sd  2.5%  97.5%
-## beta[1] 10.821 0.7835 9.125 12.370
-## beta[2]  5.369 0.8453 3.631  7.019
+## beta[1] 10.818 0.8015 9.219 12.345
+## beta[2]  5.315 0.8261 3.670  6.943
 ```
 
 Compare with results using lm above
@@ -315,23 +450,13 @@ summary(mod)
 ```
 
 ```r
-print(my.coefs, digits =5)
-```
-
-```
-##            mean      sd   2.5%   97.5%
-## beta[1] 10.8207 0.78345 9.1252 12.3705
-## beta[2]  5.3693 0.84532 3.6310  7.0192
-```
-
-```r
 cbind(coef(mod), my.coefs[,1])
 ```
 
 ```
 ##                  [,1]   [,2]
-## (Intercept)    10.833 10.821
-## scale(logprod)  5.323  5.369
+## (Intercept)    10.833 10.818
+## scale(logprod)  5.323  5.315
 ```
 
 ```r
@@ -346,7 +471,7 @@ coefplot2(mod.beta.freq, mod.se.freq, col = "red", varnames = names(mod.beta.fre
 coefplot2(mod.beta.jags, mod.se.jags, col = "blue", varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)
 ```
 
-![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
 
 Don't forget model checks, e.g. residual plots:
 
@@ -354,9 +479,9 @@ Don't forget model checks, e.g. residual plots:
 plot(out$mean$mu, out$mean$Res)
 ```
 
-![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16.png) 
+![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18.png) 
 
-Now with elevation treated as a random effect
+Now with elevation treated as a random effect (intercept only)...
 
 
 ```r
@@ -372,6 +497,8 @@ jags.data <- list(Y = div$rich,
 ```
 
 
+Specify model - only need to modify a few lines of code to include the random effect.
+
 ```r
 ###################################################
 # JAGS code
@@ -379,7 +506,7 @@ jags.data <- list(Y = div$rich,
 cat("
     model{
     # Priors beta and sigma
-    for (i in 1:K) { beta[i] ~ dnorm(0, 0.0001)}
+    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)}
     tau  <- 1 / (sigma * sigma)
     sigma ~ dunif(0.0001, 20)
     
@@ -391,7 +518,7 @@ cat("
     # Likelihood
     for (i in 1:N) {
     Y[i]    ~ dnorm(mu[i], tau)
-    mu[i]  <- eta[i] + a[Elev[i]]
+    mu[i]  <- eta[i] + a[Elev[i]] # random intercept
     eta[i] <- inprod(beta[], X[i,])
     
     # Residuals
@@ -413,7 +540,7 @@ Initial values, parameters to save etc.
 #     beta = rnorm(ncol(X), 0, 0.01),
 #     sigma = runif(1, 0.0001, 20),
 #     a = rnorm(Nre, 0, 0.01),
-#     sigma_Elev = runif(1, 0.0001, 20))  }
+#     sigma_Elev = runif(1, 0.0001, 20))}
 
 # Parameters to save
 params = c("beta", "sigma", "Res", "a", "sigma_Elev", "mu", "eta")
@@ -426,10 +553,10 @@ fit.mixmod = jags(data = jags.data,
            # inits = inits,
            parameters = params,
            model = "mixedmodel.txt",
-           n.thin = 10,
            n.chains = 3,
-           n.burnin = 1000,
-           n.iter = 5000)
+           n.thin = 10,
+           n.iter = 5000,
+           n.burnin = 1000)
 ```
 
 Check output
@@ -445,77 +572,77 @@ print(out, digits = 3)
 ##  3 chains, each with 5000 iterations (first 1000 discarded), n.thin = 10
 ##  n.sims = 1200 iterations saved
 ##              mean    sd    2.5%    25%    50%    75%  97.5%  Rhat n.eff
-## Res[1]     -2.917 2.070  -6.586 -4.509 -2.985 -1.451  1.080 1.010   200
-## Res[2]      1.513 1.454  -1.424  0.536  1.565  2.497  4.387 1.001  1200
-## Res[3]     -1.675 1.398  -4.620 -2.600 -1.673 -0.793  1.024 1.001  1200
-## Res[4]      0.556 1.461  -2.413 -0.428  0.608  1.538  3.447 1.001  1200
-## Res[5]     -2.581 1.384  -5.220 -3.480 -2.533 -1.740  0.153 1.003   730
-## Res[6]     -0.397 1.641  -3.686 -1.427 -0.381  0.615  2.950 1.010   210
-## Res[7]      2.079 1.904  -1.479  0.812  2.033  3.429  5.935 1.000  1200
-## Res[8]     -0.146 1.653  -3.433 -1.202 -0.158  0.907  3.249 1.009   230
-## Res[9]     -1.462 1.906  -5.201 -2.804 -1.467 -0.026  2.102 1.001  1200
-## Res[10]    -2.168 1.826  -5.430 -3.329 -2.318 -1.133  1.868 1.003  1200
-## Res[11]     0.112 1.630  -3.035 -0.969  0.112  1.159  3.469 1.000  1200
-## Res[12]     5.762 1.726   2.445  4.543  5.731  6.941  9.193 1.001  1200
-## Res[13]     1.559 1.605  -1.647  0.446  1.562  2.608  4.796 1.001  1200
-## Res[14]    -0.884 1.650  -4.233 -1.952 -0.873  0.210  2.377 1.000  1200
-## Res[15]     1.660 1.526  -1.225  0.611  1.639  2.704  4.747 1.001  1200
-## Res[16]    -2.919 1.702  -6.344 -4.066 -2.869 -1.781  0.396 1.001  1200
-## Res[17]     1.506 1.381  -1.099  0.616  1.559  2.339  4.254 1.003   740
-## Res[18]     0.180 1.402  -2.495 -0.725  0.223  1.080  2.992 1.003   700
-## a[1]       -0.112 2.275  -4.505 -1.213 -0.146  0.998  4.309 1.001  1200
-## a[2]       -0.146 2.364  -5.344 -1.242  0.006  1.070  4.350 1.006   470
-## a[3]        3.118 3.015  -1.016  0.811  2.622  4.838 10.217 1.000  1200
-## a[4]        1.898 3.472  -2.995 -0.278  0.955  3.692 10.411 1.000  1200
-## a[5]       -1.130 2.983  -8.538 -2.468 -0.545  0.551  3.925 1.003   550
-## a[6]       -3.225 3.206 -10.648 -5.093 -2.596 -0.747  1.034 1.009   230
-## beta[1]    10.779 2.039   6.701  9.861 10.757 11.737 14.875 1.002  1000
-## beta[2]     3.662 1.952  -0.847  2.462  4.061  5.080  6.663 1.001  1200
-## deviance   86.734 6.263  75.283 82.266 86.561 90.946 98.942 1.005   350
-## eta[1]      9.141 2.208   5.426  7.890  8.924 10.143 14.206 1.002   750
-## eta[2]      8.634 2.325   4.821  7.290  8.306  9.772 13.948 1.003   730
-## eta[3]      9.821 2.096   6.058  8.758  9.678 10.819 14.365 1.002   810
-## eta[4]      8.590 2.336   4.765  7.229  8.253  9.736 13.926 1.003   730
-## eta[5]     11.693 2.103   7.210 10.758 11.819 12.766 15.527 1.001  1200
-## eta[6]      6.622 2.992   1.990  4.693  6.026  8.107 13.617 1.002   740
-## eta[7]      5.051 3.649  -0.416  2.598  4.283  6.942 13.570 1.002   790
-## eta[8]      6.370 3.091   1.609  4.358  5.765  7.906 13.637 1.002   750
-## eta[9]     12.344 2.213   7.376 11.379 12.520 13.539 16.240 1.001  1200
-## eta[10]     9.299 2.177   5.570  8.088  9.091 10.294 14.254 1.002   760
-## eta[11]     6.018 3.234   1.078  3.881  5.394  7.645 13.663 1.002   760
-## eta[12]    13.121 2.405   7.546 12.004 13.416 14.528 17.043 1.001  1200
-## eta[13]    16.543 3.710   7.531 14.568 17.229 19.083 22.242 1.000  1200
-## eta[14]    14.767 2.965   7.362 13.319 15.287 16.721 19.432 1.000  1200
-## eta[15]    15.442 3.236   7.302 13.741 15.982 17.650 20.379 1.000  1200
-## eta[16]    17.021 3.925   7.703 14.971 17.747 19.728 23.113 1.000  1200
-## eta[17]    11.606 2.092   7.108 10.681 11.727 12.647 15.466 1.001  1200
-## eta[18]    11.932 2.137   7.297 11.012 12.091 13.031 15.871 1.001  1200
-## mu[1]       5.917 2.070   1.920  4.451  5.985  7.509  9.586 1.010   200
-## mu[2]       8.487 1.454   5.613  7.503  8.435  9.464 11.424 1.003  1200
-## mu[3]       9.675 1.398   6.976  8.793  9.673 10.600 12.620 1.002  1200
-## mu[4]       8.444 1.461   5.553  7.462  8.392  9.428 11.413 1.003  1200
-## mu[5]      11.581 1.384   8.847 10.740 11.533 12.480 14.220 1.004   640
-## mu[6]       3.397 1.641   0.050  2.385  3.381  4.427  6.686 1.010   210
-## mu[7]       3.921 1.904   0.065  2.571  3.967  5.188  7.479 1.000  1200
-## mu[8]       3.146 1.653  -0.249  2.093  3.158  4.202  6.433 1.009   230
-## mu[9]      15.462 1.906  11.898 14.026 15.467 16.804 19.201 1.001  1200
-## mu[10]      8.168 1.826   4.132  7.133  8.318  9.329 11.430 1.006  1200
-## mu[11]      4.888 1.630   1.531  3.841  4.888  5.969  8.035 1.000  1200
-## mu[12]     16.238 1.726  12.807 15.059 16.269 17.457 19.555 1.001  1200
-## mu[13]     18.441 1.605  15.204 17.392 18.438 19.554 21.647 1.000  1200
-## mu[14]     17.884 1.650  14.623 16.790 17.873 18.952 21.233 1.000  1200
-## mu[15]     17.340 1.526  14.253 16.296 17.361 18.389 20.225 1.001  1200
-## mu[16]     18.919 1.702  15.604 17.781 18.869 20.066 22.344 1.000  1200
-## mu[17]     11.494 1.381   8.746 10.661 11.441 12.384 14.099 1.004   640
-## mu[18]     11.820 1.402   9.008 10.920 11.777 12.725 14.495 1.004   620
-## sigma       2.854 0.718   1.759  2.344  2.733  3.228  4.598 1.004   530
-## sigma_Elev  3.848 3.067   0.229  1.631  3.061  5.288 11.884 1.012   290
+## Res[1]     -2.905 2.041  -6.425 -4.467 -2.998 -1.439  0.864 1.006   310
+## Res[2]      1.563 1.423  -1.224  0.661  1.564  2.470  4.399 1.002   830
+## Res[3]     -1.613 1.381  -4.374 -2.452 -1.582 -0.762  0.945 1.001  1200
+## Res[4]      0.607 1.430  -2.160 -0.297  0.594  1.518  3.466 1.002   820
+## Res[5]     -2.546 1.403  -5.308 -3.429 -2.634 -1.672  0.224 1.002  1100
+## Res[6]     -0.407 1.594  -3.544 -1.455 -0.428  0.721  2.812 1.004   480
+## Res[7]      2.048 1.985  -1.767  0.765  2.014  3.406  5.802 1.001  1200
+## Res[8]     -0.158 1.604  -3.275 -1.222 -0.197  0.934  3.148 1.004   550
+## Res[9]     -1.448 1.859  -4.938 -2.770 -1.485 -0.099  2.009 1.001  1200
+## Res[10]    -2.163 1.745  -5.430 -3.356 -2.260 -1.171  1.405 1.001  1200
+## Res[11]     0.089 1.687  -3.062 -1.021  0.068  1.203  3.333 1.000  1200
+## Res[12]     5.783 1.675   2.683  4.633  5.772  6.930  9.045 1.002  1200
+## Res[13]     1.597 1.599  -1.466  0.558  1.604  2.697  4.758 1.001  1200
+## Res[14]    -0.849 1.596  -4.199 -1.904 -0.827  0.148  2.237 1.000  1200
+## Res[15]     1.689 1.512  -1.126  0.712  1.645  2.679  4.785 1.002   790
+## Res[16]    -2.876 1.699  -6.183 -3.993 -2.862 -1.725  0.476 1.000  1200
+## Res[17]     1.540 1.395  -1.198  0.661  1.452  2.408  4.283 1.002  1000
+## Res[18]     0.217 1.432  -2.606 -0.692  0.140  1.066  3.065 1.001  1200
+## a[1]       -0.091 2.400  -4.278 -1.276 -0.114  0.850  5.241 1.008  1200
+## a[2]       -0.168 2.471  -5.482 -1.091  0.000  0.950  4.324 1.019   970
+## a[3]        3.165 3.230  -1.197  0.796  2.664  4.947 10.988 1.004  1200
+## a[4]        1.958 3.706  -3.288 -0.208  0.876  3.670 11.581 1.003   600
+## a[5]       -1.101 2.879  -7.695 -2.264 -0.397  0.564  3.001 1.006  1200
+## a[6]       -3.203 3.236 -10.614 -5.044 -2.577 -0.740  0.850 1.007   510
+## beta[1]    10.731 2.194   6.054  9.858 10.799 11.681 14.411 1.014  1200
+## beta[2]     3.630 1.940  -0.363  2.318  3.947  5.073  6.676 1.002   970
+## deviance   86.681 6.180  75.469 82.050 87.059 90.967 98.519 1.003   600
+## eta[1]      9.108 2.315   4.995  7.909  8.933 10.068 13.702 1.015  1200
+## eta[2]      8.604 2.415   4.706  7.275  8.339  9.621 13.519 1.014  1200
+## eta[3]      9.781 2.225   5.586  8.773  9.727 10.668 13.943 1.016  1200
+## eta[4]      8.561 2.425   4.669  7.214  8.286  9.574 13.508 1.014  1200
+## eta[5]     11.637 2.273   6.359 10.847 11.822 12.765 14.963 1.011  1200
+## eta[6]      6.610 3.022   2.125  4.701  6.099  8.052 13.368 1.009  1200
+## eta[7]      5.053 3.646  -0.390  2.625  4.336  7.064 13.322 1.007  1200
+## eta[8]      6.361 3.115   1.761  4.357  5.819  7.931 13.350 1.009  1200
+## eta[9]     12.283 2.388   6.572 11.412 12.569 13.580 15.725 1.009  1200
+## eta[10]     9.264 2.289   5.172  8.093  9.110 10.195 13.758 1.015  1200
+## eta[11]     6.012 3.251   1.204  3.920  5.447  7.681 13.331 1.008  1200
+## eta[12]    13.052 2.579   6.853 12.016 13.460 14.529 16.896 1.006  1200
+## eta[13]    16.445 3.857   7.437 14.421 17.066 19.086 22.182 1.002  1100
+## eta[14]    14.684 3.128   7.257 13.247 15.228 16.686 19.135 1.003  1200
+## eta[15]    15.353 3.393   7.447 13.719 15.930 17.617 20.207 1.003  1100
+## eta[16]    16.918 4.068   7.429 14.704 17.605 19.726 22.990 1.002  1000
+## eta[17]    11.550 2.261   6.324 10.761 11.715 12.669 14.876 1.011  1200
+## eta[18]    11.874 2.310   6.369 11.061 12.093 13.051 15.191 1.010  1200
+## mu[1]       5.905 2.041   2.136  4.439  5.998  7.467  9.425 1.006   310
+## mu[2]       8.437 1.423   5.601  7.530  8.436  9.339 11.224 1.002   790
+## mu[3]       9.613 1.381   7.055  8.762  9.582 10.452 12.374 1.001  1200
+## mu[4]       8.393 1.430   5.534  7.482  8.406  9.297 11.160 1.002   780
+## mu[5]      11.546 1.403   8.776 10.672 11.634 12.429 14.308 1.003  1200
+## mu[6]       3.407 1.594   0.188  2.279  3.428  4.455  6.544 1.004   480
+## mu[7]       3.952 1.985   0.198  2.594  3.986  5.235  7.767 1.001  1200
+## mu[8]       3.158 1.604  -0.148  2.066  3.197  4.222  6.275 1.004   550
+## mu[9]      15.448 1.859  11.991 14.099 15.485 16.770 18.938 1.001  1200
+## mu[10]      8.163 1.745   4.595  7.171  8.260  9.356 11.430 1.000  1200
+## mu[11]      4.911 1.687   1.667  3.797  4.932  6.021  8.062 1.000  1200
+## mu[12]     16.217 1.675  12.955 15.070 16.228 17.367 19.317 1.000  1200
+## mu[13]     18.403 1.599  15.242 17.303 18.396 19.442 21.466 1.001  1200
+## mu[14]     17.849 1.596  14.763 16.852 17.827 18.904 21.199 1.000  1200
+## mu[15]     17.311 1.512  14.215 16.321 17.355 18.288 20.126 1.002   740
+## mu[16]     18.876 1.699  15.524 17.725 18.862 19.993 22.183 1.000  1200
+## mu[17]     11.460 1.395   8.717 10.592 11.548 12.339 14.198 1.003  1100
+## mu[18]     11.783 1.432   8.935 10.934 11.860 12.692 14.606 1.003  1200
+## sigma       2.820 0.694   1.725  2.323  2.720  3.230  4.489 1.003   660
+## sigma_Elev  3.684 3.063   0.173  1.588  2.870  4.920 12.174 1.004   450
 ## 
 ## For each parameter, n.eff is a crude measure of effective sample size,
 ## and Rhat is the potential scale reduction factor (at convergence, Rhat=1).
 ## 
 ## DIC info (using the rule, pD = var(deviance)/2)
-## pD = 19.5 and DIC = 106.3
+## pD = 19.1 and DIC = 105.7
 ## DIC is an estimate of expected predictive error (lower deviance is better).
 ```
 
@@ -524,29 +651,37 @@ print(out, digits = 3)
 traceplot(fit.mixmod, varname = c("beta","sigma","sigma_Elev"))
 ```
 
-![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-211.png) ![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-212.png) ![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-213.png) ![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-214.png) 
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-231.png) ![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-232.png) ![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-233.png) ![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-234.png) 
 
 ```r
 # Check histograms
+par(mfrow = c(1,2))
 hist(out$sims.list$beta[,1])
 abline(v = 0, col = "red")
-```
 
-![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-215.png) 
-
-```r
 hist(out$sims.list$beta[,2])
 abline(v = 0, col = "red")
 ```
 
-![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-216.png) 
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-235.png) 
 
-Compare with lmer
+```r
+dev.off()
+```
+
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-236.png) 
+
+```
+## RStudioGD 
+##         2
+```
+
+There are many ways to extract different the same informationg for the output object. Before we just grabbed summary data, but we can also grab the MCMC iterations and perform our own sumamry analyses.
 
 
 ```r
 # extract mcmc samples
-all.mcmc = mcmc(out$sims.matrix) # Note multiple ways to extract mcmc samples
+all.mcmc = mcmc(out$sims.matrix) # combine chains together
 dim(all.mcmc)
 ```
 
@@ -578,7 +713,11 @@ colnames(all.mcmc)
 # all.a = all.mcmc[,grep("a",colnames(all.mcmc))] # alternatively out$sims.list$a
 all.beta = all.mcmc[,grep("beta",colnames(all.mcmc))] # alternatively out$sims.list$beta
 # all.sigma.elev = all.mcmc[,grep("sigma_Elev",colnames(all.mcmc))] # alternatively out$sims.list$sigma_Elev
+```
 
+Compare with lmer...
+
+```r
 mixmod = lmer(rich ~ scale(logprod) + (1|elev), data = div, REML = TRUE) # standardized predictors
 summary(mixmod)
 ```
@@ -616,7 +755,7 @@ apply(all.beta,2,mean)
 
 ```
 ## beta[1] beta[2] 
-##  10.779   3.662
+##   10.73    3.63
 ```
 
 ```r
@@ -624,9 +763,9 @@ cbind(fixef(mixmod), apply(all.beta,2,mean))
 ```
 
 ```
-##                  [,1]   [,2]
-## (Intercept)    10.833 10.779
-## scale(logprod)  4.752  3.662
+##                  [,1]  [,2]
+## (Intercept)    10.833 10.73
+## scale(logprod)  4.752  3.63
 ```
 
 
@@ -641,9 +780,9 @@ coefplot2(mixmod.beta.freq, mixmod.se.freq, col = "red", varnames = names(mod.be
 coefplot2(mixmod.beta.jags, mixmod.se.jags, col = "blue", varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)
 ```
 
-![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-23.png) 
+![plot of chunk unnamed-chunk-26](figure/unnamed-chunk-26.png) 
 
-Maybe should have used a different distribution given count data (e.g. Possion or negative binomial)?
+Maybe should have used a different distribution given the response is counts of species richness (e.g. Possion or negative binomial)?
 
 
 ```r
@@ -719,7 +858,7 @@ sink()}
 #     a          = rnorm(Nre, 0, 0.01),
 #     sigma_Elev = runif(1, 0.0001, 20))  }
 
-params <- c("beta", "Res", "a", "sigma_Elev", "mu", "eta")
+params = c("beta", "Res", "a", "sigma_Elev", "mu", "eta")
 ```
 
 
@@ -741,10 +880,6 @@ In case of lack of convergence - update on  the fly!
 fit.mixpois = update(fit.mixpois, n.iter = 10000, n.thin = 10) # 
 ```
 
-```
-##   |                                                          |                                                  |   0%  |                                                          |*                                                 |   2%  |                                                          |**                                                |   4%  |                                                          |***                                               |   6%  |                                                          |****                                              |   8%  |                                                          |*****                                             |  10%  |                                                          |******                                            |  12%  |                                                          |*******                                           |  14%  |                                                          |********                                          |  16%  |                                                          |*********                                         |  18%  |                                                          |**********                                        |  20%  |                                                          |***********                                       |  22%  |                                                          |************                                      |  24%  |                                                          |*************                                     |  26%  |                                                          |**************                                    |  28%  |                                                          |***************                                   |  30%  |                                                          |****************                                  |  32%  |                                                          |*****************                                 |  34%  |                                                          |******************                                |  36%  |                                                          |*******************                               |  38%  |                                                          |********************                              |  40%  |                                                          |*********************                             |  42%  |                                                          |**********************                            |  44%  |                                                          |***********************                           |  46%  |                                                          |************************                          |  48%  |                                                          |*************************                         |  50%  |                                                          |**************************                        |  52%  |                                                          |***************************                       |  54%  |                                                          |****************************                      |  56%  |                                                          |*****************************                     |  58%  |                                                          |******************************                    |  60%  |                                                          |*******************************                   |  62%  |                                                          |********************************                  |  64%  |                                                          |*********************************                 |  66%  |                                                          |**********************************                |  68%  |                                                          |***********************************               |  70%  |                                                          |************************************              |  72%  |                                                          |*************************************             |  74%  |                                                          |**************************************            |  76%  |                                                          |***************************************           |  78%  |                                                          |****************************************          |  80%  |                                                          |*****************************************         |  82%  |                                                          |******************************************        |  84%  |                                                          |*******************************************       |  86%  |                                                          |********************************************      |  88%  |                                                          |*********************************************     |  90%  |                                                          |**********************************************    |  92%  |                                                          |***********************************************   |  94%  |                                                          |************************************************  |  96%  |                                                          |************************************************* |  98%  |                                                          |**************************************************| 100%
-```
-
 Check output...
 
 
@@ -758,76 +893,76 @@ print(out, digits = 3)
 ##  3 chains, each with 10000 iterations (first 5000 discarded), n.thin = 10
 ##  n.sims = 3000 iterations saved
 ##              mean    sd   2.5%    25%    50%    75%  97.5%  Rhat n.eff
-## Res[1]     -2.253 1.632 -5.448 -3.418 -2.212 -1.034  0.691 1.005   470
-## Res[2]      1.847 1.476 -1.476  1.000  1.965  2.890  4.350 1.002  1900
-## Res[3]     -1.227 1.554 -4.552 -2.160 -1.103 -0.152  1.498 1.001  3000
-## Res[4]      0.883 1.477 -2.456  0.040  1.007  1.931  3.387 1.002  1800
-## Res[5]     -2.082 1.644 -5.486 -3.103 -2.036 -0.918  0.925 1.004   530
-## Res[6]     -0.980 1.136 -3.371 -1.717 -0.904 -0.188  1.023 1.003   750
-## Res[7]      1.278 1.178 -1.462  0.609  1.435  2.113  3.127 1.001  2400
-## Res[8]     -0.875 1.107 -3.210 -1.580 -0.792 -0.110  1.090 1.003   800
-## Res[9]     -0.677 2.384 -5.996 -2.160 -0.431  1.080  3.297 1.002  1100
-## Res[10]    -1.362 1.578 -4.658 -2.362 -1.366 -0.288  1.557 1.005   470
-## Res[11]    -0.199 1.143 -2.720 -0.885 -0.088  0.595  1.689 1.001  2000
-## Res[12]     6.107 2.284  1.121  4.639  6.197  7.747 10.115 1.002  1200
-## Res[13]     1.100 2.554 -4.221 -0.579  1.228  2.904  5.812 1.003   740
-## Res[14]    -1.934 2.807 -7.906 -3.663 -1.802  0.013  3.034 1.003   880
-## Res[15]     2.193 2.188 -2.368  0.775  2.334  3.680  6.203 1.001  3000
-## Res[16]    -3.910 2.897 -9.999 -5.779 -3.781 -1.870  1.295 1.004   540
-## Res[17]     2.020 1.633 -1.384  1.003  2.070  3.173  4.986 1.004   530
-## Res[18]     0.634 1.683 -2.857 -0.421  0.676  1.819  3.739 1.004   540
-## a[1]        0.074 0.276 -0.421 -0.059  0.050  0.192  0.692 1.017  1600
-## a[2]        0.086 0.287 -0.501 -0.043  0.075  0.229  0.640 1.015  3000
-## a[3]        0.284 0.321 -0.167  0.072  0.222  0.437  1.079 1.012   900
-## a[4]        0.096 0.387 -0.492 -0.123  0.018  0.240  1.100 1.009   780
-## a[5]       -0.095 0.340 -0.872 -0.239 -0.044  0.085  0.472 1.011   720
-## a[6]       -0.445 0.431 -1.522 -0.638 -0.356 -0.140  0.102 1.008   580
-## beta[1]     2.224 0.248  1.713  2.118  2.231  2.340  2.697 1.043  1700
-## beta[2]     0.388 0.203 -0.107  0.283  0.426  0.523  0.706 1.005   470
-## deviance   85.775 4.119 79.038 82.708 85.367 88.374 94.644 1.006   380
-## eta[1]      1.605 0.340  0.837  1.395  1.651  1.859  2.134 1.003   680
-## eta[2]      2.082 0.179  1.732  1.962  2.084  2.197  2.440 1.001  2100
-## eta[3]      2.208 0.168  1.872  2.098  2.209  2.318  2.530 1.001  3000
-## eta[4]      2.078 0.180  1.725  1.956  2.079  2.193  2.439 1.001  2000
-## eta[5]      2.394 0.149  2.089  2.294  2.401  2.493  2.673 1.004   520
-## eta[6]      1.338 0.301  0.682  1.160  1.362  1.551  1.852 1.002  1100
-## eta[7]      1.522 0.246  1.055  1.358  1.518  1.685  2.010 1.002  1700
-## eta[8]      1.312 0.300  0.647  1.135  1.333  1.522  1.826 1.002  1200
-## eta[9]      2.673 0.160  2.371  2.559  2.669  2.783  2.996 1.003   950
-## eta[10]     1.972 0.224  1.491  1.839  1.997  2.124  2.366 1.005   480
-## eta[11]     1.625 0.220  1.197  1.483  1.627  1.772  2.044 1.002  1600
-## eta[12]     2.756 0.143  2.475  2.657  2.760  2.854  3.039 1.002  1200
-## eta[13]     2.930 0.136  2.652  2.839  2.932  3.024  3.187 1.003   850
-## eta[14]     2.930 0.148  2.637  2.832  2.934  3.028  3.215 1.002  1100
-## eta[15]     2.813 0.130  2.549  2.729  2.813  2.903  3.062 1.001  3000
-## eta[16]     2.981 0.146  2.688  2.883  2.985  3.081  3.258 1.004   630
-## eta[17]     2.385 0.150  2.081  2.285  2.392  2.485  2.666 1.004   520
-## eta[18]     2.420 0.150  2.112  2.320  2.427  2.519  2.698 1.004   530
-## mu[1]       5.253 1.632  2.309  4.034  5.212  6.418  8.448 1.005   500
-## mu[2]       8.153 1.476  5.650  7.110  8.035  9.000 11.476 1.002  2000
-## mu[3]       9.227 1.554  6.502  8.152  9.103 10.160 12.552 1.001  3000
-## mu[4]       8.117 1.477  5.613  7.069  7.993  8.960 11.456 1.002  1900
-## mu[5]      11.082 1.644  8.075  9.918 11.036 12.103 14.486 1.004   520
-## mu[6]       3.980 1.136  1.977  3.188  3.904  4.717  6.371 1.003   810
-## mu[7]       4.722 1.178  2.873  3.887  4.565  5.391  7.462 1.002  2000
-## mu[8]       3.875 1.107  1.910  3.110  3.792  4.580  6.210 1.003   860
-## mu[9]      14.677 2.384 10.703 12.920 14.431 16.160 19.996 1.003   970
-## mu[10]      7.362 1.578  4.443  6.288  7.366  8.362 10.658 1.005   460
-## mu[11]      5.199 1.143  3.311  4.405  5.088  5.885  7.720 1.002  1700
-## mu[12]     15.893 2.284 11.885 14.253 15.803 17.361 20.879 1.002  1200
-## mu[13]     18.900 2.554 14.188 17.096 18.772 20.579 24.221 1.003   820
-## mu[14]     18.934 2.807 13.966 16.987 18.802 20.663 24.906 1.002  1000
-## mu[15]     16.807 2.188 12.797 15.320 16.666 18.225 21.368 1.001  3000
-## mu[16]     19.910 2.897 14.705 17.870 19.781 21.779 25.999 1.004   600
-## mu[17]     10.980 1.633  8.014  9.827 10.930 11.997 14.384 1.004   520
-## mu[18]     11.366 1.683  8.261 10.181 11.324 12.421 14.857 1.004   530
-## sigma_Elev  0.434 0.377  0.039  0.200  0.341  0.551  1.394 1.008   310
+## Res[1]     -2.173 1.618 -5.366 -3.347 -2.079 -0.971  0.638 1.001  3000
+## Res[2]      1.759 1.523 -1.655  0.898  1.897  2.855  4.243 1.001  3000
+## Res[3]     -1.293 1.612 -4.748 -2.229 -1.134 -0.157  1.385 1.001  3000
+## Res[4]      0.795 1.524 -2.620 -0.067  0.935  1.888  3.274 1.001  3000
+## Res[5]     -2.063 1.676 -5.699 -3.064 -1.970 -0.935  1.002 1.001  2600
+## Res[6]     -0.952 1.131 -3.301 -1.716 -0.883 -0.125  1.027 1.000  3000
+## Res[7]      1.229 1.206 -1.603  0.544  1.383  2.055  3.173 1.007   450
+## Res[8]     -0.851 1.102 -3.171 -1.590 -0.782 -0.043  1.065 1.000  3000
+## Res[9]     -0.804 2.377 -5.925 -2.306 -0.544  0.946  3.067 1.003  1100
+## Res[10]    -1.331 1.555 -4.439 -2.320 -1.337 -0.288  1.706 1.001  2700
+## Res[11]    -0.235 1.158 -2.830 -0.938 -0.109  0.555  1.714 1.006   510
+## Res[12]     6.007 2.283  1.172  4.537  6.179  7.655  9.867 1.002  1700
+## Res[13]     1.136 2.541 -3.967 -0.475  1.251  2.866  5.864 1.001  3000
+## Res[14]    -1.965 2.867 -8.384 -3.728 -1.730  0.091  2.919 1.001  3000
+## Res[15]     2.164 2.204 -2.535  0.762  2.320  3.637  6.211 1.002  3000
+## Res[16]    -3.842 2.880 -9.692 -5.698 -3.715 -1.867  1.430 1.001  3000
+## Res[17]     2.036 1.665 -1.562  1.051  2.137  3.174  5.084 1.001  2400
+## Res[18]     0.662 1.718 -3.019 -0.360  0.727  1.821  3.847 1.001  3000
+## a[1]        0.070 0.278 -0.414 -0.069  0.048  0.198  0.683 1.001  3000
+## a[2]        0.085 0.295 -0.503 -0.045  0.074  0.233  0.672 1.006   650
+## a[3]        0.293 0.321 -0.164  0.086  0.248  0.449  1.067 1.001  3000
+## a[4]        0.108 0.389 -0.487 -0.108  0.028  0.267  1.126 1.001  3000
+## a[5]       -0.107 0.341 -0.920 -0.253 -0.054  0.078  0.470 1.002  3000
+## a[6]       -0.470 0.436 -1.542 -0.691 -0.389 -0.148  0.080 1.004   870
+## beta[1]     2.228 0.254  1.692  2.124  2.235  2.343  2.695 1.008  1300
+## beta[2]     0.376 0.208 -0.124  0.274  0.411  0.516  0.694 1.002  1000
+## deviance   85.587 4.068 78.961 82.521 85.140 88.212 93.984 1.001  3000
+## eta[1]      1.590 0.338  0.860  1.379  1.625  1.848  2.124 1.001  3000
+## eta[2]      2.092 0.182  1.750  1.966  2.092  2.208  2.456 1.001  3000
+## eta[3]      2.214 0.172  1.889  2.099  2.212  2.325  2.545 1.001  2900
+## eta[4]      2.088 0.183  1.745  1.962  2.087  2.205  2.453 1.001  3000
+## eta[5]      2.392 0.152  2.079  2.296  2.395  2.490  2.688 1.001  2400
+## eta[6]      1.331 0.300  0.679  1.139  1.357  1.551  1.841 1.001  3000
+## eta[7]      1.532 0.248  1.039  1.372  1.530  1.697  2.029 1.006   500
+## eta[8]      1.305 0.300  0.660  1.113  1.330  1.524  1.820 1.001  3000
+## eta[9]      2.682 0.158  2.392  2.569  2.677  2.792  2.992 1.002  1200
+## eta[10]     1.968 0.222  1.457  1.839  1.993  2.119  2.346 1.001  2600
+## eta[11]     1.631 0.220  1.190  1.492  1.631  1.781  2.058 1.005   530
+## eta[12]     2.762 0.141  2.496  2.663  2.761  2.860  3.036 1.002  1900
+## eta[13]     2.928 0.135  2.649  2.841  2.931  3.019  3.177 1.001  3000
+## eta[14]     2.931 0.150  2.645  2.828  2.930  3.031  3.234 1.001  3000
+## eta[15]     2.815 0.131  2.549  2.732  2.814  2.903  3.070 1.001  3000
+## eta[16]     2.977 0.146  2.679  2.883  2.981  3.077  3.246 1.001  3000
+## eta[17]     2.383 0.152  2.069  2.285  2.385  2.481  2.678 1.001  2200
+## eta[18]     2.417 0.153  2.098  2.320  2.422  2.514  2.709 1.001  3000
+## mu[1]       5.173 1.618  2.362  3.971  5.079  6.347  8.366 1.001  3000
+## mu[2]       8.241 1.523  5.757  7.145  8.103  9.102 11.655 1.001  3000
+## mu[3]       9.293 1.612  6.615  8.157  9.134 10.229 12.748 1.001  3000
+## mu[4]       8.205 1.524  5.726  7.112  8.065  9.067 11.620 1.001  3000
+## mu[5]      11.063 1.676  7.998  9.935 10.970 12.064 14.699 1.001  2500
+## mu[6]       3.952 1.131  1.973  3.125  3.883  4.716  6.301 1.001  3000
+## mu[7]       4.771 1.206  2.827  3.945  4.617  5.456  7.603 1.006   490
+## mu[8]       3.851 1.102  1.935  3.043  3.782  4.590  6.171 1.001  3000
+## mu[9]      14.804 2.377 10.933 13.054 14.544 16.306 19.925 1.002  1200
+## mu[10]      7.331 1.555  4.294  6.288  7.337  8.320 10.439 1.001  2500
+## mu[11]      5.235 1.158  3.286  4.445  5.109  5.938  7.830 1.005   530
+## mu[12]     15.993 2.283 12.133 14.345 15.821 17.463 20.828 1.002  1800
+## mu[13]     18.864 2.541 14.136 17.134 18.749 20.475 23.967 1.001  3000
+## mu[14]     18.965 2.867 14.081 16.909 18.730 20.728 25.384 1.001  3000
+## mu[15]     16.836 2.204 12.789 15.363 16.680 18.238 21.535 1.001  3000
+## mu[16]     19.842 2.880 14.570 17.867 19.715 21.698 25.692 1.001  3000
+## mu[17]     10.964 1.665  7.916  9.826 10.863 11.949 14.562 1.001  2200
+## mu[18]     11.338 1.718  8.153 10.179 11.273 12.360 15.019 1.001  3000
+## sigma_Elev  0.453 0.379  0.038  0.211  0.351  0.569  1.471 1.007   700
 ## 
 ## For each parameter, n.eff is a crude measure of effective sample size,
 ## and Rhat is the potential scale reduction factor (at convergence, Rhat=1).
 ## 
 ## DIC info (using the rule, pD = var(deviance)/2)
-## pD = 8.4 and DIC = 94.2
+## pD = 8.3 and DIC = 93.9
 ## DIC is an estimate of expected predictive error (lower deviance is better).
 ```
 
@@ -836,7 +971,7 @@ print(out, digits = 3)
 traceplot(fit.mixmod, varname = c("beta","sigma_Elev"))
 ```
 
-![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-281.png) ![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-282.png) ![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-283.png) 
+![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-311.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-312.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-313.png) 
 
 ```r
 # Check histograms
@@ -844,14 +979,14 @@ hist(out$sims.list$beta[,1])
 abline(v = 0, col = "red")
 ```
 
-![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-284.png) 
+![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-314.png) 
 
 ```r
 hist(out$sims.list$beta[,2])
 abline(v = 0, col = "red")
 ```
 
-![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-285.png) 
+![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-315.png) 
 
 ```r
 # Extract mcmc samples
@@ -931,9 +1066,9 @@ cbind(fixef(mixmod.pois), apply(all.beta,2,mean))
 ```
 
 ```
-##                  [,1]  [,2]
-## (Intercept)    2.2557 2.224
-## scale(logprod) 0.4921 0.388
+##                  [,1]   [,2]
+## (Intercept)    2.2557 2.2280
+## scale(logprod) 0.4921 0.3764
 ```
 
 ```r
@@ -949,7 +1084,7 @@ coefplot2(mixmod.pois.beta.jags, mixmod.pois.se.jags, col = "blue",
           varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)
 ```
 
-![plot of chunk unnamed-chunk-29](figure/unnamed-chunk-29.png) 
+![plot of chunk unnamed-chunk-32](figure/unnamed-chunk-32.png) 
 
 Finally for a coefficient plot of all three models together...
 
@@ -972,7 +1107,11 @@ coefplot2(mixmod.pois.beta.jags, mixmod.pois.se.jags, col = "blue",
           varnames = names(mod.beta.freq), add = TRUE, offset = -0.35)
 ```
 
-![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-30.png) 
+![plot of chunk unnamed-chunk-33](figure/unnamed-chunk-33.png) 
+
+---------------------------------------------------------
+
+For more on fitting models in a Bayesian framework in R, I highly recommend '[A Beginner's Guide to GLM and GLMM with R](http://www.highstat.com/BGGLM.htm)' by Zuur et al. and '[Introduction to WinBUGS for Ecologists](http://www.mbr-pwrc.usgs.gov/software/kerybook/)' by Kery. The Zuur et al. book uses R2jags and comprises lots of useful examples based on real ecological datasets. The Kery book provides an excellent walk through from the basics through to more complex models (based on R2WinBUGS, but the code can easily be adapted to R2jags/JAGS). 
 
 
 
