@@ -1,0 +1,498 @@
+# sourceable R script converted from jagstut.Rmd using the rmd2rscript function (all markdown commented out)
+# http://rstudio-pubs-static.s3.amazonaws.com/12734_0a38887f19a34d92b7311a2c9cb15022.html
+
+###(Generalised) linear (mixed) models with R2jags: an extremely brief primer...##	
+#	
+#***Andrew Letten***	
+#	
+#***Friday, November 28, 2014***	
+#	
+#The purpose of this [ecostats](http://www.eco-stats.unsw.edu.au/) lab is to provide a very basic primer on running basic lm, glm and glmms in a Bayesian framework using the R2jags package (and of course JAGS). As such, the goal is not to debate the relative merits of Bayesian vs frequentist approaches, but hopefully to demystify the fitting of Bayesian models, and more specifically demonstrate that in a wide variety of (more basic) use cases the parameter estimates obtained from the two approaches are typically very similar.	
+#	
+#We will be attempting to reproduce a small element of the analysis from a recently published article in *Journal of Ecology* (for which all the data is available at datadryad.org).	
+#	
+#Kessler, M., Salazar, L., Homeier, J., Kluge, J. (2014), Species richness-productivity relationships of tropical terrestrial ferns at regional and local scales. *Journal of Ecology*, 102: 1623-1633. http://onlinelibrary.wiley.com/doi/10.1111/1365-2745.12299/abstract	
+#	
+#First things first: JAGS, R packages and data.  	
+#	
+#If you don't have it already you will need to download JAGS from http://sourceforge.net/projects/mcmc-jags/files/rjags/. 	
+#	
+#	
+# required packages	
+#	
+# install.packages("lme4")	
+# install.packages("R2jags")	
+# install.apckages("runjags")	
+# install.packages("coefplot2", repos="http://www.math.mcmaster.ca/bolker/R", type = "source")	
+	
+library(lme4)	
+library(R2jags)	
+library(runjags)	
+library(coefplot2)	
+	
+#	
+#	
+#To obtain the data you can either uncomment the following code block, or alternatively proceed directly to the next block and read in 'KessDiv.csv' which has already been modified into a useable format.	
+#	
+#	
+# temp <- tempfile(fileext=".csv")	
+# download.file(	
+#   "http://datadryad.org//bitstream/handle/10255/dryad.67401/Kessler Data Table.csv", temp)	
+# fern.dat <- read.csv(temp, header = TRUE, stringsAsFactors=FALSE)	
+# rm(temp)	
+# 	
+# fern.dat = fern.dat[-1,]	
+# names(fern.dat) = c("plot", "elev", "tag", "species", 	
+#                     "N.09", "av.09", "new.10", "N.10", 	
+#                     "av.10", "new.11", "N.11", "av.11", 	
+#                     "l.09", "l.10", "l.11", "prod.0910", 	
+#                     "prod.1011", "rhz.09", "rhz.10", "rhz.11", 	
+#                     "rhz.w", "rhz.09g", "rhz.10g", "rhz.11g", 	
+#                     "rhz.prod.0910", "rhz.prod.1011", "arb.09", "arb.10", 	
+#                     "arb.11", "av.diam", "t.rhz.09", "t.rhz.10",	
+#                     "t.rhz.11", "t.rhz.prod.0910", "t.rhz.prod.1011")	
+# 	
+# fern.dat[,c(16,17,25,26)][is.na(fern.dat[,c(16,17,25,26)])] = 0 # convert productivty NAs to zero	
+# # length(unique(fern.dat$species)) # 88, but article says 91...	
+# 	
+# library(dplyr)	
+# div = fern.dat %>% 	
+#   mutate(prod = (as.numeric(prod.1011) + as.numeric(rhz.prod.1011))) %>% 	
+#   filter(elev != 1500, elev != 3000) %>% # plots at 1500 and 3000 m appear not included?? (fig 1) 	
+#   group_by(plot, elev) %>% 	
+#   summarise(length(unique(species)), log(sum(prod)))	
+# 	
+# colnames(div)[2:4] = c("elev", "rich", "logprod")	
+#	
+#	
+#Data consists of the fern species richness and productivity sampled at 18 sites nested at 6 different elevations (i.e. three sites at each elevation.	
+#	
+#	
+div = read.csv(file = "KessDiv.csv", header = TRUE)	
+	
+div	
+	
+div$elev = as.numeric(as.factor(div$elev)) # formatting for JAGS	
+#	
+#	
+#**Hypothesis: There is a significant relationship between fern species richness `div$rich` and fern productivity `div$logprod`.**	
+#	
+#*Frequentist approach*	
+#	
+#	
+# lm 	
+mod = lm(rich ~ logprod, data = div) 	
+summary(mod) # -ve intercept = negative species richness at zero productivity!	
+	
+plot(rich ~ logprod, data=div) 	
+abline(mod)	
+#	
+#	
+#With a random effect (intercept only) on elevation (NB: only 6 levels with 3 data points in each)	
+#	
+#	
+# lmm	
+Elev = as.factor(div$elev) # back to a factor - not necessary for lmer but doing it here for peace of mind.	
+mixmod = lmer(rich ~ logprod + (1|Elev), data = div) 	
+summary(mixmod) # parameter estimates same sign as original paper but different abs value (poss due to how the productivty measure was calculated)	
+#	
+#	
+#*JAGS (Bayesian) approach (linear model without random effect)*	
+#	
+#First need to bundle data into a JAGS friendly format, starting with the design matix... 	
+#	
+X = model.matrix(~ scale(logprod), data = div) #standardize (scale and centre) predictors for JAGS/BUGS analysis	
+X	
+#	
+#	
+#A brief aside - remember the goal of regression is to find the best solution (parameters) to a series of linear equations (deterministic part) assumming our response is a random variable following some probability distribution (stochastic part): 	
+#	
+#	
+# deterministic & stochastic part 	
+data.frame("y" = div$rich, 	
+           "int" = paste(rep("  =  beta1", times = 18), "*", X[,1]), 	
+           "beta" = rep("  +   beta2 *", times = 18), 	
+           "x" = X[,2],	
+           "residuals" = paste("+   e", 1:18, sep = ""), 	
+           row.names = paste("Obs", 1:18, "      ", sep = ""))	
+#	
+#	
+#We can also write these equations in a more simple form using vectors and matrices, where we have a a vector consisting of the paramaters (betas) and and the matrix is the design matrix `X` we get from `model.matrix`. In the second example, we'll take advantage of matrix algebra to simplifiy the JAGS code. 	
+#	
+#JAGS expects the data as a named list:	
+#	
+jags.data = list(Y = div$rich, 	
+                 X = X, 	
+                 N = nrow(div), 	
+                 K = ncol(X))	
+#	
+#	
+#Specify the model in JAGS code. The sink and cat functions writes the model into a text file in the working directory. Something that can be confusing at first is that unlike R code which is read top to bottom, JAGS does not care about the order. As such variables may be called before they appear to have been defined. (Note the open and closing braces before and after sink are only needed when compiling an html/pdf with `knitr`, see [here](https://groups.google.com/forum/#!topic/knitr/TCz9vNLlslY)).	
+#	
+#	
+# JAGS Code	
+#######################################	
+{sink("model.txt")	
+cat("	
+model{	
+	
+    #Priors beta 	
+    #In JAGS: dnorm(0, 1/sigma^2)	
+    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)} # small precision(tau) = large variance = diffuse prior	
+     	
+    #Priors sigma	
+    tau <- 1 / (sigma * sigma)  # tau = 1/ sigma^2	
+    sigma ~ dunif(0.0001, 10)	
+	
+    #Likelihood	
+    for (i in 1:N) {	
+      Y[i]   ~ dnorm(mu[i], tau)   	
+      mu[i]  <- eta[i]	
+      eta[i] <- beta[1] * X[i,1] + beta[2] * X[i,2] 	
+  	
+     #Residuals	
+     Res[i]    <- Y[i] - mu[i]	
+    }	
+}	
+",fill = TRUE)	
+sink()}	
+##########################################	
+#	
+#	
+#Provide a function to generate inits for each parameters (can skip this for now as JAGS defaults to random starting values)	
+#	
+# # Initial values	
+# inits  = function (){	
+#   list(beta = rnorm(ncol(X), 0, 0.01), 	
+#        sigma = runif(1, 0.0001, 10))	
+#   }	
+#	
+#	
+#Tell JAGS which parameters you want to save	
+#	
+params = c("beta", "sigma", "Res", "mu")	
+#	
+#	
+#Finally, call JAGS using the `jags` function in R2Jags	
+#	
+fitmod = jags(data = jags.data,	
+              # inits = inits, 	
+              parameters = params,	
+              model = "model.txt",	
+              n.chains = 3,	
+              n.thin = 10,	
+              n.iter = 5000,	
+              n.burnin = 1000)	
+#	
+#	
+#Extract output...	
+#	
+out = fitmod$BUGSoutput # output in WinBUGS format	
+out	
+#	
+#	
+#Check mixing/convergence of betas (intercept and slope)...	
+#	
+traceplot(fitmod, varname = c("beta"))	
+#	
+#	
+#Check density plots	
+#	
+par(mfrow = c(1,2))	
+hist(out$sims.list$beta[,1])	
+abline(v = 0, col = "red")	
+	
+hist(out$sims.list$beta[,2])	
+abline(v = 0, col = "red")	
+dev.off()	
+#	
+#	
+#Beta coefs and credible intervals	
+#	
+my.coefs = out$summary[c("beta[1]", "beta[2]"),c(1:3,7)]	
+my.coefs	
+#	
+#	
+#Compare with results using lm above	
+#	
+mod = lm(rich ~ scale(logprod), data = div) # this time with standardized predictors	
+summary(mod)	
+cbind(coef(mod), my.coefs[,1])	
+	
+# coef plots	
+mod.beta.freq = coef(mod)	
+mod.se.freq = sqrt(diag(vcov(mod)))	
+mod.beta.jags = my.coefs[,1]	
+mod.se.jags = my.coefs[,2]	
+	
+par(mfrow = c(1,1))	
+coefplot2(mod.beta.freq, mod.se.freq, col = "red", varnames = names(mod.beta.freq), xlim = c(-10,14))	
+coefplot2(mod.beta.jags, mod.se.jags, col = "blue", varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)	
+#	
+#	
+#Don't forget model checks, e.g. residual plots:	
+#	
+plot(out$mean$mu, out$mean$Res)	
+#	
+#	
+#Now with elevation treated as a random effect (intercept only)...	
+#	
+#	
+# Bundle data for JAGS	
+# Random effects:	
+Nre = length(unique(div$elev))	
+jags.data <- list(Y = div$rich,	
+                 X = X,	
+                 N = nrow(div),	
+                 K = ncol(X),	
+                 Elev = div$elev,	
+                 Nre = Nre)	
+#	
+#	
+#	
+#Specify model - only need to modify a few lines of code to include the random effect.	
+#	
+###################################################	
+# JAGS code	
+{sink("mixedmodel.txt")	
+cat("	
+    model{	
+    # Priors beta and sigma	
+    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)}	
+    tau  <- 1 / (sigma * sigma)	
+    sigma ~ dunif(0.0001, 20)	
+    	
+    # Priors random effects and sigma_Elev	
+    for (i in 1:Nre) {a[i] ~ dnorm(0, tau_Elev)}	
+    tau_Elev <- 1 / (sigma_Elev * sigma_Elev)	
+    sigma_Elev ~ dunif(0.0001, 20)	
+    	
+    # Likelihood	
+    for (i in 1:N) {	
+    Y[i]    ~ dnorm(mu[i], tau)	
+    mu[i]  <- eta[i] + a[Elev[i]] # random intercept	
+    eta[i] <- inprod(beta[], X[i,])	
+    	
+    # Residuals	
+    Res[i]    <- Y[i] - mu[i]	
+    }	
+    }	
+    ",fill = TRUE)	
+sink()}	
+##############################################	
+	
+#	
+#	
+#Initial values, parameters to save etc.	
+#	
+#	
+# # Initial values	
+# inits = function () {	
+#   list(	
+#     beta = rnorm(ncol(X), 0, 0.01),	
+#     sigma = runif(1, 0.0001, 20),	
+#     a = rnorm(Nre, 0, 0.01),	
+#     sigma_Elev = runif(1, 0.0001, 20))}	
+	
+# Parameters to save	
+params = c("beta", "sigma", "Res", "a", "sigma_Elev", "mu", "eta")	
+#	
+#	
+#Run JAGS, run...	
+#	
+fit.mixmod = jags(data = jags.data,	
+           # inits = inits,	
+           parameters = params,	
+           model = "mixedmodel.txt",	
+           n.chains = 3,	
+           n.thin = 10,	
+           n.iter = 5000,	
+           n.burnin = 1000)	
+#	
+#	
+#Check output	
+#	
+#	
+out = fit.mixmod$BUGSoutput	
+print(out, digits = 3)	
+	
+# Assess mixing/convergence	
+traceplot(fit.mixmod, varname = c("beta","sigma","sigma_Elev"))	
+	
+# Check histograms	
+par(mfrow = c(1,2))	
+hist(out$sims.list$beta[,1])	
+abline(v = 0, col = "red")	
+	
+hist(out$sims.list$beta[,2])	
+abline(v = 0, col = "red")	
+dev.off()	
+#	
+#	
+#There are many ways to extract different the same informationg for the output object. Before we just grabbed summary data, but we can also grab the MCMC iterations and perform our own sumamry analyses.	
+#	
+#	
+# extract mcmc samples	
+all.mcmc = mcmc(out$sims.matrix) # combine chains together	
+dim(all.mcmc)	
+colnames(all.mcmc)	
+# all.a = all.mcmc[,grep("a",colnames(all.mcmc))] # alternatively out$sims.list$a	
+all.beta = all.mcmc[,grep("beta",colnames(all.mcmc))] # alternatively out$sims.list$beta	
+# all.sigma.elev = all.mcmc[,grep("sigma_Elev",colnames(all.mcmc))] # alternatively out$sims.list$sigma_Elev	
+#	
+#	
+#Compare with lmer...	
+#	
+mixmod = lmer(rich ~ scale(logprod) + (1|elev), data = div, REML = TRUE) # standardized predictors	
+summary(mixmod)	
+	
+apply(all.beta,2,mean) 	
+	
+cbind(fixef(mixmod), apply(all.beta,2,mean))	
+#	
+#	
+#	
+# coef plots	
+mixmod.beta.freq = fixef(mixmod)	
+mixmod.se.freq = sqrt(diag(vcov(mixmod)))	
+mixmod.beta.jags = apply(all.beta,2,mean)	
+mixmod.se.jags = apply(all.beta,2, sd)	
+	
+coefplot2(mixmod.beta.freq, mixmod.se.freq, col = "red", varnames = names(mod.beta.freq), xlim = c(-10,14))	
+coefplot2(mixmod.beta.jags, mixmod.se.jags, col = "blue", varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)	
+#	
+#	
+#Maybe should have used a different distribution given the response is counts of species richness (e.g. Possion or negative binomial)?	
+#	
+#	
+mixmod.pois = glmer(rich ~ scale(logprod) + (1|elev), data = div, family = "poisson")	
+summary(mixmod.pois) 	
+#	
+#	
+#	
+#	
+	
+#################################################################	
+# JAGS code	
+{sink("genmixedmodel.txt")	
+cat("	
+    model{	
+    # Priors beta	
+    for (i in 1:K) {beta[i] ~ dnorm(0, 0.0001)}	
+    	
+    # Priors random effects and sigma_Elev	
+    for (i in 1:Nre) {a[i] ~ dnorm(0, tau_Elev)}	
+    tau_Elev <- 1 / (sigma_Elev * sigma_Elev)	
+    sigma_Elev ~ dunif(0.0001, 20)	
+    	
+    # Likelihood	
+    for (i in 1:N) {	
+    Y[i]   ~ dpois(mu[i])   	
+    log(mu[i]) <- eta[i] # in jags you have to specify the link function	
+    eta[i] <- inprod(beta[], X[i,]) + a[Elev[i]]	
+    	
+    # Residuals	
+    Res[i]    <- Y[i] - mu[i]	
+    }	
+    }	
+    ",fill = TRUE)	
+sink()}	
+############################################################	
+	
+# Initial values & parameters to save	
+# inits  = function () {	
+#   list(	
+#     beta       = rnorm(ncol(X), 0, 0.01),	
+#     a          = rnorm(Nre, 0, 0.01),	
+#     sigma_Elev = runif(1, 0.0001, 20))  }	
+	
+params = c("beta", "Res", "a", "sigma_Elev", "mu", "eta")	
+#	
+#	
+#	
+# Start JAGS	
+fit.mixpois = jags(data       = jags.data,	
+           # inits = inits,	
+           parameters = params,	
+           model = "genmixedmodel.txt",	
+           n.thin = 10,	
+           n.chains = 3,	
+           n.burnin = 1000,	
+           n.iter = 5000)	
+#	
+#	
+#In case of lack of convergence - update on  the fly!	
+#	
+fit.mixpois = update(fit.mixpois, n.iter = 10000, n.thin = 10) # 	
+#	
+#	
+#Check output...	
+#	
+#	
+out = fit.mixpois$BUGSoutput	
+print(out, digits = 3)	
+	
+# Check mixing/convergence	
+traceplot(fit.mixmod, varname = c("beta","sigma_Elev"))	
+	
+# Check histograms	
+hist(out$sims.list$beta[,1])	
+abline(v = 0, col = "red")	
+	
+hist(out$sims.list$beta[,2])	
+abline(v = 0, col = "red")	
+	
+# Extract mcmc samples	
+all.mcmc = mcmc(out$sims.matrix)	
+dim(all.mcmc)	
+colnames(all.mcmc)	
+# all.a = all.mcmc[,grep("a",colnames(all.mcmc))]	
+all.beta = all.mcmc[,grep("beta",colnames(all.mcmc))]	
+# all.sigma.elev = all.mcmc[,grep("sigma_Elev",colnames(all.mcmc))]	
+#	
+#	
+#Compare with results from lme4 	
+#	
+summary(mixmod.pois)	
+cbind(fixef(mixmod.pois), apply(all.beta,2,mean))	
+	
+# coef plots	
+mixmod.pois.beta.freq = exp(fixef(mixmod.pois))	
+mixmod.pois.se.freq = exp(sqrt(diag(vcov(mixmod.pois))))	
+mixmod.pois.beta.jags = exp(apply(all.beta,2,mean))	
+mixmod.pois.se.jags = exp(apply(all.beta,2, sd))	
+	
+coefplot2(mixmod.pois.beta.freq, mixmod.pois.se.freq, col = "red", 	
+          varnames = names(mod.beta.freq), xlim = c(-10,14))	
+coefplot2(mixmod.pois.beta.jags, mixmod.pois.se.jags, col = "blue", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.1)	
+	
+#	
+#	
+#Finally for a coefficient plot of all three models together...	
+#	
+coefplot2(mod.beta.freq, mod.se.freq, col = "darkred", 	
+          varnames = names(mod.beta.freq), xlim = c(-10,14))	
+coefplot2(mod.beta.jags, mod.se.jags, col = "red", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.05)	
+	
+	
+coefplot2(mixmod.beta.freq, mixmod.se.freq, col = "darkgreen", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.15)	
+coefplot2(mixmod.beta.jags, mixmod.se.jags, col = "lightgreen", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.2)	
+	
+	
+coefplot2(mixmod.pois.beta.freq, mixmod.pois.se.freq, col = "darkblue", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.3)	
+coefplot2(mixmod.pois.beta.jags, mixmod.pois.se.jags, col = "blue", 	
+          varnames = names(mod.beta.freq), add = TRUE, offset = -0.35)	
+	
+#	
+#	
+#---------------------------------------------------------	
+#	
+#For more on fitting models in a Bayesian framework in R, I highly recommend '[A Beginner's Guide to GLM and GLMM with R](http://www.highstat.com/BGGLM.htm)' by Zuur et al. and '[Introduction to WinBUGS for Ecologists](http://www.mbr-pwrc.usgs.gov/software/kerybook/)' by Kery. The Zuur et al. book uses R2jags and comprises lots of useful examples based on real ecological datasets. The Kery book provides an excellent walk through from the basics through to more complex models (based on R2WinBUGS, but the code can easily be adapted to R2jags/JAGS). 	
+#	
+#	
+#	
